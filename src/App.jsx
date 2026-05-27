@@ -1589,7 +1589,7 @@ function Settings({ user, setUser, showToast }) {
           <div className="card">
             <div className="card-hd" style={{ marginBottom: 16 }}>Profile</div>
             {[["Full name", "name", "Jordan Taylor"], ["Work email", "email", "you@company.com"], ["Job title", "title", "Founder & CEO"], ["Company", "company", "Acme Corp"]].map(([l, k, ph]) => (
-              <div key={k} className="fgrp"><label className="lbl">{l}</label><input className="input" placeholder={ph} value={profile[k]} onChange={e => setProfile(p => ({ ...p, [k]: e.target.value })}/></div>
+              <div key={k} className="fgrp"><label className="lbl">{l}</label><input className="input" placeholder={ph} value={profile[k]} onChange={e => setProfile(p => ({ ...p, [k]: e.target.value }))}/></div>
             ))}
             <div className="fgrp"><label className="lbl">Role</label><select className="select" value={profile.role} onChange={e => setProfile(p => ({ ...p, role: e.target.value }))}>{["Founder", "Investor", "Sales Rep", "Sales Manager"].map(r => <option key={r}>{r}</option>)}</select></div>
             <button className="btn btn-p btn-sm" onClick={saveProfile}>{I.check} Save changes</button>
