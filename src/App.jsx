@@ -1,3 +1,4 @@
+import { supabase } from './supabase.js';
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -13,10 +14,9 @@ async function ai(prompt, max = 1000) {
   } catch { return ""; }
 }
 
-// Storage — uses localStorage in production (works in any browser)
 const db = {
-  set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-  get: async (k, fb = null) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; } },
+  set: async (k, v) => { try { await supabase.from('app_storage').upsert({ key: k, value: JSON.stringify(v) }); } catch { localStorage.setItem(k, JSON.stringify(v)); } },
+  get: async (k, fb = null) => { try { const { data } = await supabase.from('app_storage').select('value').eq('key', k).single(); return data ? JSON.parse(data.value) : fb; } catch { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; } } },
 };
 
 // ─── SEED DATA ────────────────────────────────────────────────────────────────
