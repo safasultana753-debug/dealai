@@ -704,22 +704,26 @@ function Auth({ go, setUser }) {
     if (val && i < 5) otpRefs.current[i + 1]?.focus();
   };
 
-  const login = async () => {
-    if (!form.email || !form.password) { setErr("Please fill in all fields."); return; }
-    setLoading(true); await new Promise(r => setTimeout(r, 700));
-    const u = { name: "Jordan Taylor", email: form.email, role: "Founder", plan: "growth", avatar: "JT" };
-    await db.set("dg_user", u); await db.set("dg_onboarded", true); setUser(u); go("app"); setLoading(false);
-  };
+ const login = async () => {
+  if (!form.email || !form.password) { setErr("Please fill in all fields."); return; }
+  setLoading(true);
+  const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+  if (error) { setErr(error.message); setLoading(false); return; }
+  const u = { name: data.user.email.split("@")[0], email: data.user.email, role: "Founder", plan: "growth", avatar: data.user.email.slice(0,2).toUpperCase() };
+  setUser(u); go("app"); setLoading(false);
+};
 
-  const signup = async () => {
-    if (!form.name || !form.email || !form.password) { setErr("Please fill all fields."); return; }
-    if (form.password !== form.confirm) { setErr("Passwords do not match."); return; }
-    if (form.password.length < 8) { setErr("Password must be at least 8 characters."); return; }
-    setLoading(true); await new Promise(r => setTimeout(r, 700)); setLoading(false); go("frappe");
-    const av = form.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-    const u = { name: form.name, email: form.email, role: "Sales Rep", plan: "growth", avatar: av };
-    await db.set("dg_user", u); setUser(u);
-  };
+const signup = async () => {
+  if (!form.name || !form.email || !form.password) { setErr("Please fill all fields."); return; }
+  if (form.password !== form.confirm) { setErr("Passwords do not match."); return; }
+  if (form.password.length < 8) { setErr("Password must be at least 8 characters."); return; }
+  setLoading(true);
+  const { data, error } = await supabase.auth.signUp({ email: form.email, password: form.password, options: { data: { full_name: form.name } } });
+  if (error) { setErr(error.message); setLoading(false); return; }
+  const av = form.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+  const u = { name: form.name, email: form.email, role: "Founder", plan: "growth", avatar: av };
+  setUser(u); setLoading(false); go("frappe");
+};
 
   const sendReset = async () => {
     if (!form.email) { setErr("Enter your email first."); return; }
