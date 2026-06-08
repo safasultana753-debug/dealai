@@ -1729,7 +1729,7 @@ function Settings({ user, setUser, showToast }) {
       {tab === "integrations" && (
         <div className="g3">
           {[{id:"hubspot",icon:"🟠",name:"HubSpot",desc:"Sync contacts and deals automatically."},{id:"salesforce",icon:"☁️",name:"Salesforce",desc:"Enterprise CRM two-way sync."},{id:"frappe",icon:"🔷",name:"Frappe CRM",desc:"Native integration — 1-click import.",badge:"Native"},{id:"slack",icon:"💬",name:"Slack",desc:"Deal alerts and signal notifications."},{id:"gcal",icon:"📅",name:"Google Calendar",desc:"Auto-detect meetings for briefs."},{id:"linkedin",icon:"🔗",name:"LinkedIn",desc:"Social signals and hiring trends."}].map(int => (
-            <div key={int.id} className="card">
+           <div key={int.id} className="cand" onClick={int.id === "frappe" ? () => go("frappe") : undefined} style={{cursor: int.id === "frappe" ? "pointer" : "default"}}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 9 }}>
                 <div style={{ fontSize: 22 }}>{int.icon}</div>
                 <span className={`badge ${integrations[int.id] ? "sg" : "ss"}`}>{integrations[int.id] ? "Connected" : "Not connected"}</span>
