@@ -1692,7 +1692,7 @@ function Analytics({ deals }) {
 }
 
 // ─── SETTINGS ─────────────────────────────────────────────────────────────────
-function Settings({ user, setUser, showToast }) {
+function Settings({ user, setUser, showToast, go }) {
   const [tab, setTab] = useState("profile");
   const [profile, setProfile] = useState({ name: user?.name || "Jordan Taylor", email: user?.email || "jordan@company.com", title: "Founder & CEO", company: "Acme Corp", role: user?.role || "Founder" });
   const [integrations, setIntegrations] = useState({ hubspot: false, salesforce: false, frappe: true, slack: false, gcal: true, linkedin: false });
