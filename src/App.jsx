@@ -1740,6 +1740,7 @@ function Settings({ user, setUser, showToast }) {
               <button className={`btn btn-sm ${integrations[int.id] ? "btn-danger" : "btn-p"}`} onClick={() => { setIntegrations(p => ({ ...p, [int.id]: !p[int.id] })); showToast(!integrations[int.id] ? `${int.name} connected` : `${int.name} disconnected`, !integrations[int.id] ? "success" : "warn"); }}>
                 {integrations[int.id] ? "Disconnect" : "Connect"}
               </button>
+             {int.id === "frappe" && <button className="btn btn-p btn-sm" style={{marginLeft:6}} onClick={() => go("frappe")}>Open →</button>}
             </div>
           ))}
         </div>
