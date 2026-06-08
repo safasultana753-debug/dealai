@@ -1969,7 +1969,7 @@ export default function App() {
     switch (page) {
       case "dashboard": return <Dashboard {...shared}/>;
       case "deals": return <Pipeline {...shared}/>;
-      case "briefing": return <Briefing {...shared} savedBriefs={savedBriefs}/>;
+      case "briefing": return <Briefing {...shared} savedBriefs={[]}/>;
       case "signals": return <SignalFeed {...shared}/>;
       case "investors": return <Investors {...shared}/>;
       case "analytics": return <Analytics {...shared}/>;
