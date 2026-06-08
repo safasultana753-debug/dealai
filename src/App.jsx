@@ -1965,7 +1965,7 @@ export default function App() {
   if (screen === "frappe") return (<><style>{CSS}</style><FrappeConnect go={s => setScreen(s)} showToast={showToast}/></>);
   if (screen === "onboarding") return (<><style>{CSS}</style><Onboarding go={() => setScreen("app")}/></>);
 
-  const shared = { deals, setDeals, investors, setInvestors, showToast, user, setUser, goPage: setPage, setDetailDeal, savedBriefs, toggleSaveBrief };
+  const shared = { go: setScreen, deals, setDeals, investors, showToast, user, setUser, goPage: setPage, setDetailDeal, savedBriefs, toggleSaveBrief };
   const renderPage = () => {
     switch (page) {
       case "dashboard": return <Dashboard {...shared}/>;
