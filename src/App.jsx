@@ -852,55 +852,173 @@ const signup = async () => {
 }
 
 // ─── FRAPPE CRM CONNECT SCREEN ────────────────────────────────────────────────
-function FrappeConnect({ go, showToast }) {
-  const [creds, setCreds] = useState({ url: "", key: "", secret: "" });
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState(null); // null | "success" | "error"
-  const [err, setErr] = useState("");
-  const up = (k, v) => setCreds(p => ({ ...p, [k]: v }));
 
-  const connect = async () => {
-    if (!creds.url || !creds.key || !creds.secret) { setErr("Please fill in all fields."); return; }
-    setLoading(true); setErr("");
+
+function FrappeConnect({ go, showToast }) {
+  const [frappeCRM, setFrappeCRM] = useState({
+    leads: [], contacts: [], deals: [], synced_at: null, loading: false, error: null,
+  });
+  const [frappeSyncing, setFrappeSyncing] = useState(false);
+  const [frappeTab, setFrappeTab] = useState('deals');
+  const [connected, setConnected] = useState(false);
+
+  const syncFrappeCRM = async () => {
+    setFrappeSyncing(true);
+    setFrappeCRM(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const auth = btoa(`${creds.key}:${creds.secret}`);
-      const r = await fetch(`${creds.url.replace(/\/$/, "")}/api/resource/CRM Deal?limit=1`, { headers: { "Authorization": `Basic ${auth}` } });
-      if (r.ok) { setStatus("success"); showToast("Frappe CRM connected successfully!", "success"); setTimeout(() => go("onboarding"), 1000); }
-      else { setErr(`Connection failed — ${r.status}. Check your URL and credentials.`); setStatus("error"); }
-    } catch { setErr("Could not reach Frappe instance. Check the URL."); setStatus("error"); }
-    setLoading(false);
+      const res = await fetch('/api/frappe?action=sync');
+      const data = await res.json();
+      if (data.success) {
+        setFrappeCRM({ leads: data.leads, contacts: data.contacts, deals: data.deals, synced_at: data.synced_at, loading: false, error: null });
+        setConnected(true);
+        localStorage.setItem('frappe_crm_data', JSON.stringify({ leads: data.leads, contacts: data.contacts, deals: data.deals, synced_at: data.synced_at }));
+        showToast('Frappe CRM synced successfully!', 'success');
+      } else {
+        setFrappeCRM(prev => ({ ...prev, loading: false, error: data.error || 'Sync failed' }));
+        showToast('Sync failed: ' + (data.error || 'Unknown error'), 'error');
+      }
+    } catch (err) {
+      setFrappeCRM(prev => ({ ...prev, loading: false, error: 'Could not connect to Frappe CRM' }));
+      showToast('Could not connect to Frappe CRM', 'error');
+    }
+    setFrappeSyncing(false);
   };
 
-  const useSample = () => { showToast("Loading 6 sample deals…", "info"); go("onboarding"); };
+  useState(() => {
+    const cached = localStorage.getItem('frappe_crm_data');
+    if (cached) {
+      try { const p = JSON.parse(cached); setFrappeCRM(prev => ({ ...prev, ...p })); setConnected(true); } catch {}
+    }
+    syncFrappeCRM();
+  }, []);
+
+  const statusColor = (s) => ({ 'Open': '#3b82f6', 'Won': '#22c55e', 'Lost': '#ef4444', 'Interested': '#f59e0b', 'Replied': '#8b5cf6', 'Qualified': '#06b6d4' }[s] || '#6b7280');
+  const fmt = (v) => !v ? '—' : typeof v === 'number' ? '₹' + v.toLocaleString('en-IN') : v;
 
   return (
-    <div className="frappe-wrap">
-      <div className="frappe-card">
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}><div className="sb-icon">DG</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 14, color: "#E8EDF8" }}>DealGauge</span></div>
-        <div className="frappe-logo">🔷</div>
-        <div style={{ fontFamily: "Sora,sans-serif", fontSize: 19, fontWeight: 800, color: "#E8EDF8", marginBottom: 6 }}>Connect Frappe CRM</div>
-        <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 22, lineHeight: 1.55 }}>Import your deals automatically. DealGauge will fetch up to 50 records and generate AI scores for each.</div>
-
-        <div className="fgrp"><label className="lbl">Frappe Instance URL</label><input className="input" placeholder="https://yourcompany.frappe.cloud" value={creds.url} onChange={e => up("url", e.target.value)}/></div>
-        <div className="fgrp"><label className="lbl">API Key</label><input className="input" placeholder="Your API key" value={creds.key} onChange={e => up("key", e.target.value)}/></div>
-        <div className="fgrp"><label className="lbl">API Secret</label><input className="input" type="password" placeholder="Your API secret" value={creds.secret} onChange={e => up("secret", e.target.value)} onKeyDown={e => e.key === "Enter" && connect()}/></div>
-
-        {err && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, color: "#EF4444", marginBottom: 13 }}>⚠ {err}</div>}
-        {status === "success" && <div style={{ background: "rgba(34,197,94,.1)", border: "1px solid rgba(34,197,94,.25)", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, color: "#22C55E", marginBottom: 13 }}>✓ Connected! Importing deals…</div>}
-
-        <button className="btn btn-p" style={{ width: "100%", height: 39, marginBottom: 10, fontSize: 13.5 }} onClick={connect} disabled={loading}>
-          {loading ? <><div className="spin"/>Testing connection…</> : "Connect Frappe CRM →"}
-        </button>
-        <button className="btn btn-out" style={{ width: "100%", height: 37, fontSize: 13 }} onClick={useSample}>Skip — use sample data</button>
-
-        <div style={{ marginTop: 18, padding: "12px 14px", background: "#1A2236", borderRadius: 9, fontSize: 11.5, color: "#6B7A99", lineHeight: 1.6 }}>
-          <div style={{ fontWeight: 600, color: "#6B7A99", marginBottom: 4 }}>Where to find your API key:</div>
-          Frappe desk → Settings → My Profile → API Access → Generate Keys
+    <div style={{ padding: '20px', maxWidth: '860px', margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '22px' }}>🔷</span>
+            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#f1f5f9', margin: 0 }}>Frappe CRM</h2>
+            {connected && <span style={{ fontSize: '11px', background: '#22c55e22', color: '#22c55e', border: '1px solid #22c55e44', borderRadius: '20px', padding: '2px 10px', fontWeight: '600' }}>Connected</span>}
+          </div>
+          {frappeCRM.synced_at && <p style={{ fontSize: '11px', color: '#64748b', margin: '4px 0 0' }}>Last synced: {new Date(frappeCRM.synced_at).toLocaleString('en-IN')}</p>}
         </div>
+        <button onClick={syncFrappeCRM} disabled={frappeSyncing} style={{ padding: '8px 16px', background: frappeSyncing ? '#334155' : '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: frappeSyncing ? 'not-allowed' : 'pointer' }}>
+          {frappeSyncing ? '⟳ Syncing...' : '⟳ Sync Now'}
+        </button>
       </div>
+
+      {/* Error */}
+      {frappeCRM.error && <div style={{ background: '#1e1a2e', border: '1px solid #7c3aed', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', color: '#c4b5fd', fontSize: '13px' }}>⚠️ {frappeCRM.error}</div>}
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        {[{ label: 'Deals', count: frappeCRM.deals.length, icon: '💼', color: '#3b82f6' }, { label: 'Leads', count: frappeCRM.leads.length, icon: '🎯', color: '#f59e0b' }, { label: 'Contacts', count: frappeCRM.contacts.length, icon: '👥', color: '#22c55e' }].map(s => (
+          <div key={s.label} style={{ background: '#1e293b', borderRadius: '10px', padding: '14px', border: `1px solid ${s.color}33`, textAlign: 'center' }}>
+            <div style={{ fontSize: '22px' }}>{s.icon}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>{s.count}</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        {['deals', 'leads', 'contacts'].map(tab => (
+          <button key={tab} onClick={() => setFrappeTab(tab)} style={{ padding: '7px 16px', background: frappeTab === tab ? '#3b82f6' : '#1e293b', color: frappeTab === tab ? '#fff' : '#94a3b8', border: '1px solid ' + (frappeTab === tab ? '#3b82f6' : '#334155'), borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', textTransform: 'capitalize' }}>
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Loading */}
+      {frappeCRM.loading && <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>⟳ Syncing from Frappe CRM...</div>}
+
+      {/* DEALS */}
+      {frappeTab === 'deals' && !frappeCRM.loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {frappeCRM.deals.length === 0 ? <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>No deals yet. Click Sync Now.</div>
+            : frappeCRM.deals.map(deal => (
+              <div key={deal.name} style={{ background: '#1e293b', borderRadius: '10px', padding: '14px 16px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#f1f5f9' }}>{deal.deal_name || deal.name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>{deal.organization || '—'} · {deal.deal_owner || '—'}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: statusColor(deal.status) + '22', color: statusColor(deal.status), border: '1px solid ' + statusColor(deal.status) + '44' }}>{deal.status || 'Open'}</span>
+                    {deal.annual_revenue && <span style={{ fontSize: '13px', fontWeight: '700', color: '#22c55e' }}>{fmt(deal.annual_revenue)}</span>}
+                  </div>
+                </div>
+                {deal.probability !== undefined && (
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>Probability</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{deal.probability}%</span>
+                    </div>
+                    <div style={{ height: '4px', background: '#0f172a', borderRadius: '2px' }}>
+                      <div style={{ height: '4px', borderRadius: '2px', width: deal.probability + '%', background: deal.probability >= 70 ? '#22c55e' : deal.probability >= 40 ? '#f59e0b' : '#ef4444' }} />
+                    </div>
+                  </div>
+                )}
+                {deal.expected_closing_date && <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>🗓 Closing: {deal.expected_closing_date}</div>}
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* LEADS */}
+      {frappeTab === 'leads' && !frappeCRM.loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {frappeCRM.leads.length === 0 ? <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>No leads yet. Click Sync Now.</div>
+            : frappeCRM.leads.map(lead => (
+              <div key={lead.name} style={{ background: '#1e293b', borderRadius: '10px', padding: '14px 16px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#f1f5f9' }}>{lead.lead_name || lead.name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>{lead.company || '—'} · {lead.email_id || '—'}</div>
+                    {lead.mobile_no && <div style={{ fontSize: '12px', color: '#64748b' }}>📞 {lead.mobile_no}</div>}
+                  </div>
+                  <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: statusColor(lead.status) + '22', color: statusColor(lead.status), border: '1px solid ' + statusColor(lead.status) + '44' }}>{lead.status || 'Open'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                  {lead.source && <span style={{ fontSize: '11px', color: '#64748b' }}>Source: {lead.source}</span>}
+                  {lead.annual_revenue && <span style={{ fontSize: '11px', color: '#22c55e' }}>{fmt(lead.annual_revenue)}</span>}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* CONTACTS */}
+      {frappeTab === 'contacts' && !frappeCRM.loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {frappeCRM.contacts.length === 0 ? <div style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>No contacts yet. Click Sync Now.</div>
+            : frappeCRM.contacts.map(contact => (
+              <div key={contact.name} style={{ background: '#1e293b', borderRadius: '10px', padding: '14px 16px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#f1f5f9' }}>{[contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>{contact.company_name || '—'}{contact.designation ? ` · ${contact.designation}` : ''}</div>
+                    {contact.email_id && <div style={{ fontSize: '12px', color: '#64748b' }}>✉ {contact.email_id}</div>}
+                    {contact.mobile_no && <div style={{ fontSize: '12px', color: '#64748b' }}>📞 {contact.mobile_no}</div>}
+                  </div>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#3b82f620', border: '1px solid #3b82f640', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: '700', color: '#3b82f6' }}>
+                    {(contact.first_name || contact.name || '?')[0].toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── ONBOARDING ───────────────────────────────────────────────────────────────
 function Onboarding({ go }) {
