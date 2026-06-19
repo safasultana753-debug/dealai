@@ -1848,7 +1848,6 @@ function Landing({ go }) {
         <p className="h-sub">DealAi transforms scattered company signals into a live probability score, AI meeting brief, and next best action — in under 5 minutes.</p>
         <div style={{ display: "flex", gap: 9, marginBottom: 40 }}>
           <button className="hbp" onClick={() => go("auth")}>Start Free Trial →</button>
-          <button className="hbs">Watch Demo ▶</button>
         </div>
         <div style={{ display: "flex", gap: 32 }}>
           {[["45 min → 5 min","Meeting prep time"],["0–100%","Deal probability"],["94%","AI accuracy"],["Frappe native","CRM integration"]].map(([v, l]) => (
