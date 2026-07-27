@@ -104,6 +104,9 @@ input,select,textarea,button{font-family:'DM Sans',sans-serif}
 .ai-pill{display:flex;align-items:center;gap:5px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:7px;padding:3px 9px;flex-shrink:0}
 .ai-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes logoPop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes logoGlow{0%,100%{box-shadow:0 0 0 0 rgba(59,123,255,.4)}50%{box-shadow:0 0 32px 8px rgba(59,123,255,.35)}}
+@keyframes fadeIn{to{opacity:1}}
 .ai-pill-txt{font-size:10.5px;font-weight:600;color:var(--green)}
 
 /* PAGE */
@@ -346,7 +349,21 @@ const I = {
   dl: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
   link: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
   comm: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  eye: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  eyeOff: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.66 3.87M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
 };
+
+function PwField({ value, onChange, placeholder, onKeyDown }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input className="input" style={{ paddingRight: 38 }} type={show ? "text" : "password"} placeholder={placeholder} value={value} onChange={onChange} onKeyDown={onKeyDown}/>
+      <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#6B7A99", padding: 6, display: "flex" }}>
+        <span style={{ width: 15, height: 15 }}>{show ? I.eyeOff : I.eye}</span>
+      </button>
+    </div>
+  );
+}
 
 // ─── PROBABILITY GAUGE (SVG Semicircle with needle) ────────────────────────────
 const ProbGauge = ({ score, size = 180 }) => {
@@ -688,13 +705,15 @@ function DealModal({ deal, onClose, onSave, onDelete }) {
 }
 
 // ─── AUTH (Login / Signup / Forgot Password / Reset Password) ─────────────────
-function Auth({ go, setUser }) {
+function Auth({ go, setUser, showToast }) {
   const [mode, setMode] = useState("login"); // login | signup | forgot | otp | reset
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [newPass, setNewPass] = useState("");
+  const [confirmNew, setConfirmNew] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState("");
   const otpRefs = useRef([]);
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -705,24 +724,30 @@ function Auth({ go, setUser }) {
   };
 
  const login = async () => {
-  if (!form.email || !form.password) { setErr("Please fill in all fields."); return; }
-  setLoading(true);
+  if (!form.email || !form.password) { setErr("Please fill in all fields."); showToast?.("Please fill in all fields.", "error"); return; }
+  setLoading(true); setErr("");
   const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-  if (error) { setErr(error.message); setLoading(false); return; }
+  if (error) { setErr(error.message); showToast?.(error.message, "error"); setLoading(false); return; }
   const u = { name: data.user.email.split("@")[0], email: data.user.email, role: "Founder", plan: "growth", avatar: data.user.email.slice(0,2).toUpperCase() };
-  setUser(u); go("app"); setLoading(false);
+  setUser(u); showToast?.("Welcome back!", "success"); go("app"); setLoading(false);
+};
+
+const handleOAuth = async (provider) => {
+  setErr(""); setOauthLoading(provider);
+  const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } });
+  if (error) { setErr(error.message); showToast?.(error.message, "error"); setOauthLoading(""); }
 };
 
 const signup = async () => {
-  if (!form.name || !form.email || !form.password) { setErr("Please fill all fields."); return; }
-  if (form.password !== form.confirm) { setErr("Passwords do not match."); return; }
+  if (!form.name || !form.email || !form.password) { setErr("Please fill all fields."); showToast?.("Please fill all fields.", "error"); return; }
+  if (form.password !== form.confirm) { setErr("Passwords do not match."); showToast?.("Passwords do not match.", "error"); return; }
   if (form.password.length < 8) { setErr("Password must be at least 8 characters."); return; }
-  setLoading(true);
+  setLoading(true); setErr("");
   const { data, error } = await supabase.auth.signUp({ email: form.email, password: form.password, options: { data: { full_name: form.name } } });
-  if (error) { setErr(error.message); setLoading(false); return; }
+  if (error) { setErr(error.message); showToast?.(error.message, "error"); setLoading(false); return; }
   const av = form.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
   const u = { name: form.name, email: form.email, role: "Founder", plan: "growth", avatar: av };
-  setUser(u); setLoading(false); go("frappe");
+  setUser(u); showToast?.("Account created!", "success"); setLoading(false); go("frappe");
 };
 
   const sendReset = async () => {
@@ -739,14 +764,16 @@ const signup = async () => {
 
   const resetPass = async () => {
     if (newPass.length < 8) { setErr("Password must be at least 8 characters."); return; }
+    if (newPass !== confirmNew) { setErr("Passwords do not match."); return; }
     setLoading(true); await new Promise(r => setTimeout(r, 600)); setLoading(false);
-    setMode("login"); setErr(""); setOtp(["","","","","",""]);
+    showToast?.("Password reset successfully", "success");
+    setMode("login"); setErr(""); setOtp(["","","","","",""]); setNewPass(""); setConfirmNew("");
   };
 
   return (
     <div className="auth-wrap">
       <div className="auth-left">
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 40 }}><div className="sb-icon">DG</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 15, color: "#F1F5F9" }}>DealAi</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 40 }}><div className="sb-icon">DA</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 15, color: "#F1F5F9" }}>DealAi</span></div>
         <div style={{ fontFamily: "Sora,sans-serif", fontSize: 32, fontWeight: 800, color: "#fff", lineHeight: 1.15, marginBottom: 13, maxWidth: 340 }}>
           Know which deal will close<br/><span style={{ background: "linear-gradient(135deg,#6fa7ff,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>before you pick up the phone.</span>
         </div>
@@ -798,8 +825,8 @@ const signup = async () => {
           <>
             <div style={{ fontFamily: "Sora,sans-serif", fontSize: 20, fontWeight: 800, color: "#E8EDF8", marginBottom: 5 }}>Set new password</div>
             <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 20 }}>Choose a strong password for your account.</div>
-            <div className="fgrp"><label className="lbl">New password</label><input className="input" type="password" placeholder="Min 8 characters" value={newPass} onChange={e => setNewPass(e.target.value)}/></div>
-            <div className="fgrp"><label className="lbl">Confirm password</label><input className="input" type="password" placeholder="Repeat password" onKeyDown={e => e.key === "Enter" && resetPass()}/></div>
+            <div className="fgrp"><label className="lbl">New password</label><PwField placeholder="Min 8 characters" value={newPass} onChange={e => setNewPass(e.target.value)}/></div>
+            <div className="fgrp"><label className="lbl">Confirm password</label><PwField placeholder="Repeat password" value={confirmNew} onChange={e => setConfirmNew(e.target.value)} onKeyDown={e => e.key === "Enter" && resetPass()}/></div>
             {err && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, color: "#EF4444", marginBottom: 12 }}>⚠ {err}</div>}
             <button className="btn btn-p" style={{ width: "100%", height: 39, fontSize: 13.5 }} onClick={resetPass} disabled={loading}>
               {loading ? <><div className="spin"/>Saving…</> : "Reset password →"}
@@ -813,11 +840,11 @@ const signup = async () => {
             <div style={{ cursor: "pointer", marginBottom: 24 }} onClick={() => go("landing")}><span style={{ fontSize: 12.5, color: "#6B7A99" }}>← Back to home</span></div>
             <div style={{ fontFamily: "Sora,sans-serif", fontSize: 20, fontWeight: 800, color: "#E8EDF8", marginBottom: 5 }}>Welcome back</div>
             <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 20 }}>Sign in to your DealAi workspace.</div>
-            <button className="oauth-btn">G{"\u00a0\u00a0"}Continue with Google</button>
-            <button className="oauth-btn">💼{"\u00a0\u00a0"}Continue with LinkedIn</button>
+            <button className="oauth-btn" onClick={() => handleOAuth("google")} disabled={!!oauthLoading}>{oauthLoading === "google" ? <div className="spin"/> : "G"}{"\u00a0\u00a0"}Continue with Google</button>
+            <button className="oauth-btn" onClick={() => handleOAuth("linkedin_oidc")} disabled={!!oauthLoading}>{oauthLoading === "linkedin_oidc" ? <div className="spin"/> : "💼"}{"\u00a0\u00a0"}Continue with LinkedIn</button>
             <div className="auth-div"><div className="auth-div-line"/><span>or sign in with email</span><div className="auth-div-line"/></div>
             <div className="fgrp"><label className="lbl">Work email</label><input className="input" type="email" placeholder="you@company.com" value={form.email} onChange={e => up("email", e.target.value)}/></div>
-            <div className="fgrp"><label className="lbl">Password</label><input className="input" type="password" placeholder="••••••••" value={form.password} onChange={e => up("password", e.target.value)} onKeyDown={e => e.key === "Enter" && login()}/></div>
+            <div className="fgrp"><label className="lbl">Password</label><PwField placeholder="••••••••" value={form.password} onChange={e => up("password", e.target.value)} onKeyDown={e => e.key === "Enter" && login()}/></div>
             <div style={{ textAlign: "right", marginBottom: 13 }}><span style={{ fontSize: 12.5, color: "#3B7BFF", cursor: "pointer", fontWeight: 600 }} onClick={() => { setMode("forgot"); setErr(""); }}>Forgot password?</span></div>
             {err && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, color: "#EF4444", marginBottom: 12 }}>⚠ {err}</div>}
             <button className="btn btn-p" style={{ width: "100%", height: 39, fontSize: 13.5 }} onClick={login} disabled={loading}>
@@ -833,12 +860,12 @@ const signup = async () => {
             <div style={{ cursor: "pointer", marginBottom: 24 }} onClick={() => go("landing")}><span style={{ fontSize: 12.5, color: "#6B7A99" }}>← Back to home</span></div>
             <div style={{ fontFamily: "Sora,sans-serif", fontSize: 20, fontWeight: 800, color: "#E8EDF8", marginBottom: 5 }}>Create your account</div>
             <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 20 }}>Start your 14-day free trial — no card required.</div>
-            <button className="oauth-btn">G{"\u00a0\u00a0"}Continue with Google</button>
+            <button className="oauth-btn" onClick={() => handleOAuth("google")} disabled={!!oauthLoading}>{oauthLoading === "google" ? <div className="spin"/> : "G"}{"\u00a0\u00a0"}Continue with Google</button>
             <div className="auth-div"><div className="auth-div-line"/><span>or sign up with email</span><div className="auth-div-line"/></div>
             <div className="fgrp"><label className="lbl">Full name</label><input className="input" placeholder="Jordan Taylor" value={form.name} onChange={e => up("name", e.target.value)}/></div>
             <div className="fgrp"><label className="lbl">Work email</label><input className="input" type="email" placeholder="you@company.com" value={form.email} onChange={e => up("email", e.target.value)}/></div>
-            <div className="fgrp"><label className="lbl">Password (min 8 chars)</label><input className="input" type="password" placeholder="Choose a password" value={form.password} onChange={e => up("password", e.target.value)}/></div>
-            <div className="fgrp"><label className="lbl">Confirm password</label><input className="input" type="password" placeholder="Repeat password" value={form.confirm} onChange={e => up("confirm", e.target.value)} onKeyDown={e => e.key === "Enter" && signup()}/></div>
+            <div className="fgrp"><label className="lbl">Password (min 8 chars)</label><PwField placeholder="Choose a password" value={form.password} onChange={e => up("password", e.target.value)}/></div>
+            <div className="fgrp"><label className="lbl">Confirm password</label><PwField placeholder="Repeat password" value={form.confirm} onChange={e => up("confirm", e.target.value)} onKeyDown={e => e.key === "Enter" && signup()}/></div>
             {err && <div style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.25)", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, color: "#EF4444", marginBottom: 12 }}>⚠ {err}</div>}
             <button className="btn btn-p" style={{ width: "100%", height: 39, fontSize: 13.5 }} onClick={signup} disabled={loading}>
               {loading ? <><div className="spin"/>Creating account…</> : "Create account →"}
@@ -1036,7 +1063,7 @@ function Onboarding({ go }) {
     <div className="ob-wrap">
       <div className="ob-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon" style={{ width: 26, height: 26, fontSize: 11 }}>DG</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 13.5, color: "#E8EDF8" }}>DealAi</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon" style={{ width: 26, height: 26, fontSize: 11 }}>DA</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 13.5, color: "#E8EDF8" }}>DealAi</span></div>
           <span style={{ fontSize: 12, color: "#6B7A99" }}>Step {step + 1} of {steps.length}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 26 }}>
@@ -1831,12 +1858,16 @@ function AIAssistant({ deals, open, setOpen }) {
 }
 
 // ─── LANDING ──────────────────────────────────────────────────────────────────
-function Landing({ go }) {
+function Landing({ go, showToast }) {
+  const navClick = l => {
+    if (l === "Pricing") { document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    showToast?.(`${l} \u2014 coming soon`, "info");
+  };
   return (
     <div className="hero">
       <nav className="h-nav">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon">DG</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 14, color: "#F1F5F9" }}>DealAi</span></div>
-        <div className="h-links">{["Features","Pricing","Investors","Blog"].map(l => <span key={l} className="h-link">{l}</span>)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon">DA</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 14, color: "#F1F5F9" }}>DealAi</span></div>
+        <div className="h-links">{["Features","Pricing","Investors","Blog"].map(l => <span key={l} className="h-link" onClick={() => navClick(l)}>{l}</span>)}</div>
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           <button className="hbs" style={{ padding: "7px 14px", fontSize: 13 }} onClick={() => go("auth")}>Sign in</button>
           <button className="hbp" style={{ padding: "7px 14px", fontSize: 13 }} onClick={() => go("auth")}>Get started →</button>
@@ -1857,12 +1888,12 @@ function Landing({ go }) {
       </div>
 
       {/* Pricing */}
-      <div style={{ background: "rgba(59,123,255,.06)", borderTop: "1px solid rgba(59,123,255,.15)", padding: "52px 40px" }}>
+      <div id="pricing" style={{ background: "rgba(59,123,255,.06)", borderTop: "1px solid rgba(59,123,255,.15)", padding: "52px 40px" }}>
         <h2 style={{ fontFamily: "Sora,sans-serif", fontSize: 26, fontWeight: 800, textAlign: "center", color: "#fff", marginBottom: 28 }}>Simple pricing</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, maxWidth: 800, margin: "0 auto" }}>
-          {[{ n: "Starter", p: "₹499", s: "/month", b: "Small pilot teams", hot: false, feats: ["Basic account briefs", "Simple score display", "Email alerts", "3 team members"] },
-            { n: "Growth", p: "₹1,250", s: "/month", b: "Sales teams", hot: true, feats: ["Full probability meter", "AI explanations & actions", "CRM sync", "Unlimited members", "AI agent"] },
-            { n: "Enterprise", p: "Custom", s: " pricing", b: "Large companies", hot: false, feats: ["Advanced AI agent", "Admin controls", "Custom integrations", "Dedicated support", "SLA"] }].map(pl => (
+          {[{ n: "Starter", p: "₹199", s: "/month", b: "Small pilot teams", hot: false, feats: ["Basic account briefs", "Simple score display", "Email alerts", "3 team members"] },
+            { n: "Growth", p: "₹1,250", s: "/year", b: "Sales teams", hot: true, feats: ["Full probability meter", "AI explanations & actions", "CRM sync", "12 team members", "AI agent"] },
+            { n: "Enterprise", p: "45,999", s: "/year", b: "Large companies", hot: false, feats: ["Advanced AI agent", "Admin controls", "Custom integrations", "Dedicated support", "SLA"] }].map(pl => (
             <div key={pl.n} style={{ background: pl.hot ? "rgba(59,123,255,.1)" : "rgba(255,255,255,.03)", border: `1px solid ${pl.hot ? "rgba(59,123,255,.4)" : "rgba(255,255,255,.08)"}`, borderRadius: 12, padding: 22, position: "relative", overflow: "hidden" }}>
               {pl.hot && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#3B7BFF,#A78BFA)" }}/>}
               {pl.hot && <div style={{ background: "#3B7BFF", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, display: "inline-block", marginBottom: 10, textTransform: "uppercase" }}>Most Popular</div>}
@@ -1870,7 +1901,7 @@ function Landing({ go }) {
               <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.35)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 7 }}>{pl.n}</div>
               <div style={{ fontFamily: "DM Mono,monospace", fontSize: 26, fontWeight: 700, color: "#fff", marginBottom: 12 }}>{pl.p}<span style={{ fontSize: 12, color: "rgba(255,255,255,.38)", fontFamily: "DM Sans,sans-serif" }}>{pl.s}</span></div>
               {pl.feats.map((f, i) => <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "rgba(255,255,255,.68)", marginBottom: 6 }}><div style={{ width: 12, height: 12, borderRadius: "50%", background: pl.hot ? "#3B7BFF" : "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>{f}</div>)}
-              <button onClick={() => go("auth")} style={{ marginTop: 14, width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: pl.hot ? "#3B7BFF" : "rgba(255,255,255,.07)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "DM Sans,sans-serif" }}>
+              <button onClick={() => pl.n === "Enterprise" ? (window.location.href = "mailto:sales@dealai.app?subject=Enterprise%20Plan%20Inquiry") : go("auth")} style={{ marginTop: 14, width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: pl.hot ? "#3B7BFF" : "rgba(255,255,255,.07)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "DM Sans,sans-serif" }}>
                 {pl.n === "Enterprise" ? "Contact Sales →" : "Start Free Trial →"}
               </button>
             </div>
@@ -1883,8 +1914,8 @@ function Landing({ go }) {
         </div>
       </div>
       <footer style={{ borderTop: "1px solid rgba(255,255,255,.06)", padding: "18px 56px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon" style={{ width: 26, height: 26, fontSize: 11 }}>DG</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 700, fontSize: 13, color: "#E8EDF8" }}>DealAi</span></div>
-        <div style={{ display: "flex", gap: 16 }}>{["Privacy","Terms","Security","Docs"].map(l => <span key={l} style={{ fontSize: 12, color: "rgba(255,255,255,.28)", cursor: "pointer" }}>{l}</span>)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon" style={{ width: 26, height: 26, fontSize: 11 }}>DA</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 700, fontSize: 13, color: "#E8EDF8" }}>DealAi</span></div>
+        <div style={{ display: "flex", gap: 16 }}>{["Privacy","Terms","Security","Docs"].map(l => <span key={l} style={{ fontSize: 12, color: "rgba(255,255,255,.28)", cursor: "pointer" }} onClick={() => navClick(l)}>{l}</span>)}</div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,.18)" }}>© 2025 DealAi Inc.</div>
       </footer>
     </div>
@@ -1893,6 +1924,8 @@ function Landing({ go }) {
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [booting, setBooting] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setBooting(false), 1400); return () => clearTimeout(t); }, []);
   const [screen, setScreen] = useState("landing");
   const [page, setPage] = useState("dashboard");
   const [user, setUser] = useState(null);
@@ -1959,8 +1992,18 @@ export default function App() {
   ];
   const pageTitle = { dashboard: "Dashboard", deals: "Pipeline", briefing: "AI Briefings", signals: "Signal Feed", investors: "Investors", analytics: "Analytics", settings: "Settings" };
 
-  if (screen === "landing") return (<><style>{CSS}</style><Landing go={setScreen}/></>);
-  if (screen === "auth") return (<><style>{CSS}</style><Auth go={s => setScreen(s)} setUser={setUser}/></>);
+  if (booting) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{ minHeight: "100vh", background: "#0A0D14", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
+        <div style={{ width: 64, height: 64, borderRadius: 16, background: "linear-gradient(135deg,#3B7BFF,#A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 26, fontFamily: "Sora,sans-serif", animation: "logoPop .6s cubic-bezier(.34,1.56,.64,1), logoGlow 1.8s ease-in-out .6s infinite" }}>DA</div>
+        <div style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 20, color: "#E8EDF8", letterSpacing: ".02em", opacity: 0, animation: "fadeIn .5s ease .3s forwards" }}>DealAi</div>
+      </div>
+    </>
+  );
+
+  if (screen === "landing") return (<><style>{CSS}</style><Landing go={setScreen} showToast={showToast}/></>);
+  if (screen === "auth") return (<><style>{CSS}</style><Auth go={s => setScreen(s)} setUser={setUser} showToast={showToast}/></>);
   if (screen === "frappe") return (<><style>{CSS}</style><FrappeConnect go={s => setScreen(s)} showToast={showToast}/></>);
   if (screen === "onboarding") return (<><style>{CSS}</style><Onboarding go={() => setScreen("app")}/></>);
 
@@ -1984,7 +2027,7 @@ export default function App() {
         {sbOpen && <div className="mob-overlay" onClick={() => setSbOpen(false)}/>}
         <aside className={`sidebar${sbOpen ? " mob-open" : ""}`}>
           <div className="sb-logo" onClick={() => setScreen("landing")}>
-            <div className="sb-logo-row"><div className="sb-icon">DG</div><span className="sb-name">DealAi</span></div>
+            <div className="sb-logo-row"><div className="sb-icon">DA</div><span className="sb-name">DealAi</span></div>
           </div>
           <nav className="sb-nav">
             {NAV.map(sec => (
