@@ -1891,9 +1891,9 @@ function Landing({ go, showToast }) {
       <div id="pricing" style={{ background: "rgba(59,123,255,.06)", borderTop: "1px solid rgba(59,123,255,.15)", padding: "52px 40px" }}>
         <h2 style={{ fontFamily: "Sora,sans-serif", fontSize: 26, fontWeight: 800, textAlign: "center", color: "#fff", marginBottom: 28 }}>Simple pricing</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, maxWidth: 800, margin: "0 auto" }}>
-          {[{ n: "Starter", p: "₹199", s: "/month", b: "Small pilot teams", hot: false, feats: ["Basic account briefs", "Simple score display", "Email alerts", "3 team members"] },
-            { n: "Growth", p: "₹1,250", s: "/year", b: "Sales teams", hot: true, feats: ["Full probability meter", "AI explanations & actions", "CRM sync", "12 team members", "AI agent"] },
-            { n: "Enterprise", p: "45,999", s: "/year", b: "Large companies", hot: false, feats: ["Advanced AI agent", "Admin controls", "Custom integrations", "Dedicated support", "SLA"] }].map(pl => (
+          {[{ n: "Starter", p: "₹499", s: "/month", b: "Small pilot teams", hot: false, feats: ["Basic account briefs", "Simple score display", "Email alerts", "3 team members"] },
+            { n: "Growth", p: "₹1,250", s: "/month", b: "Sales teams", hot: true, feats: ["Full probability meter", "AI explanations & actions", "CRM sync", "Unlimited members", "AI agent"] },
+            { n: "Enterprise", p: "Custom", s: " pricing", b: "Large companies", hot: false, feats: ["Advanced AI agent", "Admin controls", "Custom integrations", "Dedicated support", "SLA"] }].map(pl => (
             <div key={pl.n} style={{ background: pl.hot ? "rgba(59,123,255,.1)" : "rgba(255,255,255,.03)", border: `1px solid ${pl.hot ? "rgba(59,123,255,.4)" : "rgba(255,255,255,.08)"}`, borderRadius: 12, padding: 22, position: "relative", overflow: "hidden" }}>
               {pl.hot && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#3B7BFF,#A78BFA)" }}/>}
               {pl.hot && <div style={{ background: "#3B7BFF", color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, display: "inline-block", marginBottom: 10, textTransform: "uppercase" }}>Most Popular</div>}
@@ -2007,7 +2007,8 @@ export default function App() {
   if (screen === "frappe") return (<><style>{CSS}</style><FrappeConnect go={s => setScreen(s)} showToast={showToast}/></>);
   if (screen === "onboarding") return (<><style>{CSS}</style><Onboarding go={() => setScreen("app")}/></>);
 
- const shared = { go: setScreen, deals, setDeals, investors, showToast, user, setUser, goPage: setPage, setDetailDeal, toasts, toggleSaveBrief };
+  const renderPage = () => {
+    const shared = { go: setScreen, deals, setDeals, investors, showToast, user, setUser, goPage: setPage, setDetailDeal, toasts, toggleSaveBrief };
     switch (page) {
       case "dashboard": return <Dashboard {...shared}/>;
       case "deals": return <Pipeline {...shared}/>;
