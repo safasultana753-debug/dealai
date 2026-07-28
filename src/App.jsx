@@ -10,8 +10,21 @@ async function ai(prompt, max = 1000) {
         messages: [{ role: "user", content: prompt }] })
     });
     const d = await r.json();
+    if (!r.ok) {
+      const msg = d?.error?.message || d?.error || `AI request failed (${r.status})`;
+      console.error("AI error:", msg);
+      throw new Error(msg);
+    }
     return d.content?.map(b => b.text || "").join("") || "";
-  } catch { return ""; }
+  } catch (e) {
+    console.error("AI error:", e);
+    throw e;
+  }
+}
+
+// Throws on failure — use in UI that surfaces the error (chat).
+async function aiSafe(...args) {
+  try { return await ai(...args); } catch { return ""; }
 }
 
 const db = {
@@ -478,7 +491,7 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
 
   const generateBrief = async () => {
     setLoading(true);
-    const txt = await ai(`Sales intelligence for ${deal.contact} at ${deal.company} (${deal.sector}, ${deal.stage}, ${fmt(deal.value)}, current score ${deal.score}%). Return ONLY valid JSON: {"summary":"2-3 sentence company overview","signals":["signal1","signal2","signal3"],"scoreExplanation":"3-4 sentences explaining why score is ${deal.score}%","nextActions":["specific action 1","specific action 2","specific action 3"],"riskFactors":["risk1","risk2"],"momentum":"${deal.momentum}"}`, 1000);
+    const txt = await aiSafe(`Sales intelligence for ${deal.contact} at ${deal.company} (${deal.sector}, ${deal.stage}, ${fmt(deal.value)}, current score ${deal.score}%). Return ONLY valid JSON: {"summary":"2-3 sentence company overview","signals":["signal1","signal2","signal3"],"scoreExplanation":"3-4 sentences explaining why score is ${deal.score}%","nextActions":["specific action 1","specific action 2","specific action 3"],"riskFactors":["risk1","risk2"],"momentum":"${deal.momentum}"}`, 1000);
     try { setBrief(JSON.parse(txt.replace(/```json|```/g, "").trim())); }
     catch {
       setBrief({ summary: `${deal.company} is a ${deal.sector} company with ${deal.stage} stage deal and ${scoreLabel(deal.score)} probability based on current pipeline signals.`, signals: [`${deal.stage} stage — active evaluation in progress`, `Deal value ${fmt(deal.value)} signals serious buying intent`, `Contact ${deal.contact} confirmed decision-making authority`], scoreExplanation: `Score of ${deal.score}% reflects the ${deal.stage} stage with ${deal.score >= 70 ? "strong positive signals and recent engagement." : deal.score >= 40 ? "moderate signals with some open questions remaining." : "early stage with significant qualification still needed."}`, nextActions: [`Follow up with ${deal.contact} on outstanding questions by end of week`, `Prepare a customised ROI summary for the ${deal.sector} sector`, `Schedule a technical review call to address integration concerns`], riskFactors: [`Budget approval timeline unclear`, `Evaluating 1-2 competing solutions`], momentum: deal.momentum });
@@ -489,7 +502,7 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
   const loadNews = async () => {
     if (newsFeed) return;
     setLoadingNews(true);
-    const txt = await ai(`Generate 8 realistic news and social media items for ${deal.company} in ${deal.sector}. Return ONLY valid JSON array: [{"type":"news","source":"string","headline":"string","summary":"string","time":"string","sentiment":"positive|negative|neutral"},{"type":"social","platform":"LinkedIn","author":"string","authorRole":"string","content":"string","likes":number,"time":"string","sentiment":"string"},...repeat mix to 8 total]`, 1500);
+    const txt = await aiSafe(`Generate 8 realistic news and social media items for ${deal.company} in ${deal.sector}. Return ONLY valid JSON array: [{"type":"news","source":"string","headline":"string","summary":"string","time":"string","sentiment":"positive|negative|neutral"},{"type":"social","platform":"LinkedIn","author":"string","authorRole":"string","content":"string","likes":number,"time":"string","sentiment":"string"},...repeat mix to 8 total]`, 1500);
     try {
       const parsed = JSON.parse(txt.replace(/```json|```/g, "").trim());
       setNewsFeed(Array.isArray(parsed) ? parsed : []);
@@ -912,7 +925,7 @@ function FrappeConnect({ go, showToast }) {
     setFrappeSyncing(false);
   };
 
-  useState(() => {
+  useEffect(() => {
     const cached = localStorage.getItem('frappe_crm_data');
     if (cached) {
       try { const p = JSON.parse(cached); setFrappeCRM(prev => ({ ...prev, ...p })); setConnected(true); } catch {}
@@ -1303,7 +1316,7 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
 }
 
 // ─── PIPELINE (Deal cards grid + kanban) ──────────────────────────────────────
-function Pipeline({ deals, setDeals, showToast, setDetailDeal }) {
+function Pipeline({ deals, setDeals, showToast, setDetailDeal, savedBriefs }) {
   const [view, setView] = useState("grid");
   const [modal, setModal] = useState(null);
   const [filter, setFilter] = useState("All");
@@ -1593,7 +1606,7 @@ function Investors({ investors, setInvestors, showToast }) {
   };
   const getIntro = async inv => {
     setLoadingId(inv.id); setAiIntro(null);
-    const txt = await ai(`Write a 2-sentence warm intro pitch for DealAi (AI sales intelligence B2B SaaS, Frappe CRM native, ₹1.7Cr ARR, 60% MoM growth) to ${inv.name} at ${inv.firm} who focuses on ${inv.focus.join(", ")} at ${inv.stage}. Be specific and under 55 words.`);
+    const txt = await aiSafe(`Write a 2-sentence warm intro pitch for DealAi (AI sales intelligence B2B SaaS, Frappe CRM native, ₹1.7Cr ARR, 60% MoM growth) to ${inv.name} at ${inv.firm} who focuses on ${inv.focus.join(", ")} at ${inv.stage}. Be specific and under 55 words.`);
     setAiIntro({ inv: inv.name, txt: txt || `${inv.name}, DealAi is the only AI sales intelligence platform built natively for Frappe CRM — generating ₹1.7Cr ARR with 60% month-on-month growth. We're raising to expand our signal intelligence layer and would love to explore a ${inv.checks} investment.` });
     setLoadingId(null);
   };
@@ -1827,8 +1840,13 @@ function AIAssistant({ deals, open, setOpen }) {
     const m = msg || input.trim(); if (!m || loading) return; setInput("");
     setMsgs(x => [...x, { role: "usr", txt: m }]); setLoading(true);
     const ctx = deals.map(d => `${d.company}(${d.stage},${fmt(d.value)},score:${d.score}%,${d.momentum},contact:${d.contact})`).join(";");
-    const txt = await ai(`You are DealAi AI. Pipeline: ${ctx}. Question: "${m}". Reply in 2-3 sentences, be specific and actionable.`, 800);
-    setMsgs(x => [...x, { role: "bot", txt: txt || "Try again in a moment." }]); setLoading(false);
+    try {
+      const txt = await ai(`You are DealAi AI. Pipeline: ${ctx}. Question: "${m}". Reply in 2-3 sentences, be specific and actionable.`, 800);
+      setMsgs(x => [...x, { role: "bot", txt: txt || "I didn't get a response \u2014 try rephrasing." }]);
+    } catch (e) {
+      setMsgs(x => [...x, { role: "bot", txt: `\u26a0\ufe0f ${e.message || "AI unavailable"}` }]);
+    }
+    setLoading(false);
   };
   return (
     <div className="ai-float">
@@ -2009,11 +2027,11 @@ export default function App() {
   if (screen === "onboarding") return (<><style>{CSS}</style><Onboarding go={() => setScreen("app")}/></>);
 
   const renderPage = () => {
-    const shared = { go: setScreen, deals, setDeals, investors, showToast, user, setUser, goPage: setPage, setDetailDeal, toasts, toggleSaveBrief };
+    const shared = { go: setScreen, deals, setDeals, investors, showToast, user, setUser, goPage: setPage, setDetailDeal, toasts, savedBriefs, toggleSaveBrief };
     switch (page) {
       case "dashboard": return <Dashboard {...shared}/>;
       case "deals": return <Pipeline {...shared}/>;
-      case "briefing": return <Briefing {...shared} savedBriefs={[]}/>;
+      case "briefing": return <Briefing {...shared}/>;
       case "signals": return <SignalFeed {...shared}/>;
       case "investors": return <Investors {...shared}/>;
       case "analytics": return <Analytics {...shared}/>;
