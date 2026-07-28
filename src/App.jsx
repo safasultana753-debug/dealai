@@ -63,6 +63,7 @@ const CSS = `
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1E2A42;border-radius:99px}
 input,select,textarea,button{font-family:'DM Sans',sans-serif}
+svg:not([width]){width:14px;height:14px;flex-shrink:0}
 
 /* LAYOUT */
 .shell{display:flex;min-height:100vh}
