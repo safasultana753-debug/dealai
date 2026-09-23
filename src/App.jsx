@@ -334,6 +334,7 @@ svg:not([width]){width:14px;height:14px;flex-shrink:0}
 .h-title span{background:linear-gradient(135deg,#6fa7ff,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .h-sub{font-size:15px;color:rgba(255,255,255,.52);max-width:460px;line-height:1.65;margin-bottom:26px}
 .hbp{padding:11px 22px;background:var(--blue);color:#fff;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s}
+.hero .hbp,.modal-ft .btn-p{background:#3B7BFF !important;color:#fff !important;opacity:1}
 .hbp:hover{background:#2563eb;transform:translateY(-1px);box-shadow:0 8px 24px rgba(59,123,255,.4)}
 .hbs{padding:11px 22px;background:rgba(255,255,255,.07);color:#fff;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.14);font-family:'DM Sans',sans-serif;transition:all .15s}
 .hbs:hover{background:rgba(255,255,255,.12)}
@@ -1250,11 +1251,24 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
   const avgScore = deals.length ? Math.round(deals.reduce((s, d) => s + d.score, 0) / deals.length) : 0;
   const hot = deals.filter(d => d.score >= 70).length;
   const atRisk = deals.filter(d => d.score < 30).length;
+  const hr = new Date().getHours();
+  const greeting = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+  const scoreBand = avgScore >= 70 ? "Strong" : avgScore >= 40 ? "Moderate" : "Needs work";
+  // Signals derived from the user's real deal data (no invented news)
+  const signals = [];
+  deals.forEach(d => {
+    if (d.momentum === "Declining") signals.push({ icon: "⚠", color: "#F59E0B", title: `${d.company} is cooling off`, body: `Momentum declining at ${d.stage} stage. Re-engage ${d.contact}.`, type: "Risk", rank: 0 });
+    if (d.score >= 70 && d.stage !== "Closed Won") signals.push({ icon: "🔥", color: "#22C55E", title: `${d.company} is ready to close`, body: `${d.score}% likelihood at ${d.stage}. Push for next step.`, type: "Hot", rank: 1 });
+    if (["Proposal", "Negotiation"].includes(d.stage) && d.score < 70) signals.push({ icon: "📝", color: "#3B7BFF", title: `${d.company} in ${d.stage}`, body: `Score ${d.score}%. Address open objections with ${d.contact}.`, type: "Action", rank: 2 });
+    if (!d.value) signals.push({ icon: "₹", color: "#A78BFA", title: `${d.company} has no deal value`, body: "Add an estimated value to improve pipeline accuracy.", type: "Data", rank: 3 });
+    if (d.stage === "Lead" && d.score < 40) signals.push({ icon: "🔎", color: "#2DD4BF", title: `Qualify ${d.company}`, body: `Early-stage lead. Confirm budget and need with ${d.contact}.`, type: "Qualify", rank: 4 });
+  });
+  signals.sort((a, b) => a.rank - b.rank);
   return (
     <div className="page">
       <div className="ph">
         <div>
-          <div className="ph-title">Good morning, {user?.name?.split(" ")[0] || "Jordan"} 👋</div>
+          <div className="ph-title">{greeting}, {user?.name?.split(" ")[0] || "there"} 👋</div>
           <div className="ph-sub">{deals.length} deals tracked · {hot} hot deals · {atRisk} at risk</div>
         </div>
         <div className="ph-actions">
@@ -1266,8 +1280,8 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
       {/* 4 KPI cards as per PRD spec */}
       <div className="g4" style={{ marginBottom: 14 }}>
         {[
-          { l: "Pipeline Value", v: fmt(pipe), col: "blue", chg: "+18%", up: true },
-          { l: "Avg Deal Score", v: `${avgScore}%`, col: "green", chg: "+4pts", up: true },
+          { l: "Pipeline Value", v: fmt(pipe), col: "blue", chg: `${deals.length} deal${deals.length === 1 ? "" : "s"}`, up: true },
+          { l: "Avg Deal Score", v: `${avgScore}%`, col: "green", chg: scoreBand, up: avgScore >= 40 },
           { l: `Hot Deals (≥70%)`, v: String(hot), col: "amber", chg: `+${hot}`, up: true },
           { l: "At Risk (<30%)", v: String(atRisk), col: "red", chg: atRisk > 0 ? `${atRisk} need action` : "None", up: atRisk === 0 },
         ].map(s => (
@@ -1308,14 +1322,15 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
             <div className="card-hd">AI signals</div>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 6, height: 6, background: "#22C55E", borderRadius: "50%", animation: "pulse 2s ease-in-out infinite" }}/>
-              <span style={{ fontSize: 10.5, color: "#6B7A99" }}>Live</span>
+              <span style={{ fontSize: 10.5, color: "#6B7A99" }}>Auto</span>
             </div>
           </div>
-          <div className="card-sub">Latest account signals</div>
-          {[{ icon: "💰", color: "#3B7BFF", title: "Nexus AI closes Series B", body: "$18M led by Sequoia.", time: "2h ago", type: "Funding" }, { icon: "👥", color: "#22C55E", title: "DataStack hiring surge", body: "23 engineering roles.", time: "5h ago", type: "Hiring" }, { icon: "📰", color: "#2DD4BF", title: "CloudPrime in TechCrunch", body: "Top cloud startup 2025.", time: "Yesterday", type: "News" }, { icon: "⚠", color: "#F59E0B", title: "Competitor launch detected", body: "Review FinTech Co deal.", time: "2d ago", type: "Risk" }].map(s => (
-            <div key={s.title} style={{ display: "flex", gap: 9, padding: "10px 0", borderBottom: "1px solid #1E2A42" }}>
+          <div className="card-sub">Based on your pipeline</div>
+          {signals.length === 0 && <div style={{ fontSize: 12, color: "#6B7A99", padding: "14px 0" }}>No signals yet. Add deals to see insights here.</div>}
+          {signals.slice(0, 4).map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: 9, padding: "10px 0", borderBottom: "1px solid #1E2A42" }}>
               <div style={{ width: 30, height: 30, borderRadius: 7, background: "#1A2236", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{s.icon}</div>
-              <div><div style={{ fontSize: 12.5, fontWeight: 600, color: "#E8EDF8" }}>{s.title}</div><div style={{ fontSize: 11.5, color: "#6B7A99", lineHeight: 1.4 }}>{s.body}</div><div style={{ fontSize: 10, color: "#6B7A99", marginTop: 3 }}>{s.time} · <span style={{ color: s.color, fontWeight: 600 }}>{s.type}</span></div></div>
+              <div><div style={{ fontSize: 12.5, fontWeight: 600, color: "#E8EDF8" }}>{s.title}</div><div style={{ fontSize: 11.5, color: "#6B7A99", lineHeight: 1.4 }}>{s.body}</div><div style={{ fontSize: 10, color: "#6B7A99", marginTop: 3 }}><span style={{ color: s.color, fontWeight: 600 }}>{s.type}</span></div></div>
             </div>
           ))}
           <button className="btn btn-out btn-sm" style={{ width: "100%", justifyContent: "center", marginTop: 10 }} onClick={() => goPage("signals")}>View full signal feed →</button>
