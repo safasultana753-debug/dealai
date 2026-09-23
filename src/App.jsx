@@ -59,6 +59,20 @@ const SEED_NOTIFS = [
 const STAGES = ["Lead","Qualified","Demo","Proposal","Negotiation","Closed Won","Closed Lost"];
 const scoreColor = s => s >= 70 ? "#22C55E" : s >= 40 ? "#F59E0B" : "#EF4444";
 
+// ─── PIPELINE SIGNALS (derived from real deal data, never invented) ─────────
+const buildSignals = deals => {
+  const out = [];
+  deals.forEach(d => {
+    if (d.momentum === "Declining") out.push({ icon: "⚠", color: "#F59E0B", deal: d.company, score: d.score, title: `${d.company} is cooling off`, body: `Momentum declining at ${d.stage} stage. Re-engage ${d.contact}.`, type: "Risk", rank: 0 });
+    if (d.score >= 70 && d.stage !== "Closed Won") out.push({ icon: "🔥", color: "#22C55E", deal: d.company, score: d.score, title: `${d.company} is ready to close`, body: `${d.score}% likelihood at ${d.stage}. Push for the next step.`, type: "Hot", rank: 1 });
+    if (["Proposal", "Negotiation"].includes(d.stage) && d.score < 70) out.push({ icon: "📝", color: "#3B7BFF", deal: d.company, score: d.score, title: `${d.company} in ${d.stage}`, body: `Score ${d.score}%. Address open objections with ${d.contact}.`, type: "Action", rank: 2 });
+    if (!d.value) out.push({ icon: "₹", color: "#A78BFA", deal: d.company, score: d.score, title: `${d.company} has no deal value`, body: "Add an estimated value to improve pipeline accuracy.", type: "Data", rank: 3 });
+    if (d.stage === "Lead" && d.score < 40) out.push({ icon: "🔎", color: "#2DD4BF", deal: d.company, score: d.score, title: `Qualify ${d.company}`, body: `Early-stage lead. Confirm budget and need with ${d.contact}.`, type: "Qualify", rank: 4 });
+    if (d.stage === "Closed Won") out.push({ icon: "🏆", color: "#22C55E", deal: d.company, score: d.score, title: `${d.company} closed`, body: `Won at ${fmt(d.value)}. Ask ${d.contact} for a referral or case study.`, type: "Won", rank: 5 });
+  });
+  return out.sort((a, b) => a.rank - b.rank);
+};
+
 // ─── DEALS ↔ SUPABASE ─────────────────────────────────────────────────────────
 const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
 const rowToDeal = r => ({
@@ -536,20 +550,15 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
   const loadNews = async () => {
     if (newsFeed) return;
     setLoadingNews(true);
-    const txt = await aiSafe(`Generate 8 realistic news and social media items for ${deal.company} in ${deal.sector}. Return ONLY valid JSON array: [{"type":"news","source":"string","headline":"string","summary":"string","time":"string","sentiment":"positive|negative|neutral"},{"type":"social","platform":"LinkedIn","author":"string","authorRole":"string","content":"string","likes":number,"time":"string","sentiment":"string"},...repeat mix to 8 total]`, 1500);
+    const txt = await aiSafe(`You are helping a salesperson prepare for a deal with ${deal.company} (${deal.sector}, contact ${deal.contact}). You do NOT have internet access, so do NOT invent news, numbers, or events. Suggest 5 specific things to research before the next call, each with a search query to use. Return ONLY valid JSON array: [{"headline":"what to find out","summary":"why it matters for this deal","source":"exact search query to use"}]`, 800);
     try {
       const parsed = JSON.parse(txt.replace(/```json|```/g, "").trim());
-      setNewsFeed(Array.isArray(parsed) ? parsed : []);
+      setNewsFeed((Array.isArray(parsed) ? parsed : []).map(x => ({ ...x, type: "news", sentiment: "", time: "" })));
     } catch {
       setNewsFeed([
-        { type: "news", source: "TechCrunch", headline: `${deal.company} announces expansion into Southeast Asia`, summary: "The company is set to open new offices in Singapore and Jakarta as part of aggressive regional growth.", time: "2 days ago", sentiment: "positive" },
-        { type: "social", platform: "LinkedIn", author: deal.contact, authorRole: "VP Sales", content: `Excited to announce we've crossed our Q2 targets 3 weeks early! ${deal.sector} has never been more dynamic. Looking forward to what's next.`, likes: 214, time: "3 days ago", sentiment: "positive" },
-        { type: "news", source: "Reuters", headline: `${deal.sector} sector M&A activity up 34% in Q2`, summary: "Consolidation continues as mid-market players seek scale. Analysts expect deal frequency to accelerate.", time: "4 days ago", sentiment: "neutral" },
-        { type: "news", source: "Bloomberg", headline: `${deal.company} secures $12M growth funding round`, summary: "The round was led by a Tier-1 VC, signalling strong investor confidence in their product roadmap.", time: "1 week ago", sentiment: "positive" },
-        { type: "social", platform: "LinkedIn", author: "Sanjay Mehta", authorRole: "CTO", content: `We're hiring senior engineers! Our tech stack is evolving fast and we need people who love building at scale. Drop me a DM.`, likes: 89, time: "1 week ago", sentiment: "positive" },
-        { type: "news", source: "Economic Times", headline: `${deal.company} partners with major enterprise client`, summary: "The partnership is expected to add significantly to recurring revenue and validate the enterprise go-to-market strategy.", time: "2 weeks ago", sentiment: "positive" },
-        { type: "social", platform: "LinkedIn", author: deal.contact, authorRole: "VP Sales", content: `Our latest report on ${deal.sector} transformation is live. Key finding: 73% of companies are underinvesting in automation. Full report in comments.`, likes: 156, time: "2 weeks ago", sentiment: "neutral" },
-        { type: "news", source: "VCCircle", headline: `${deal.sector} startups face growing competition from incumbents`, summary: "Established players are accelerating digital roadmaps, putting pressure on newer entrants to differentiate faster.", time: "3 weeks ago", sentiment: "negative" },
+        { type: "news", source: `"${deal.company}" funding OR raises`, headline: "Recent funding or financial news", summary: "Fresh funding often means new budget for tools.", sentiment: "", time: "" },
+        { type: "news", source: `"${deal.company}" hiring`, headline: "Hiring activity", summary: "Team growth can signal expansion and new needs.", sentiment: "", time: "" },
+        { type: "news", source: `"${deal.contact}" ${deal.company} LinkedIn`, headline: `${deal.contact}'s recent posts`, summary: "Learn their priorities before the next conversation.", sentiment: "", time: "" },
       ]);
     }
     setLoadingNews(false);
@@ -593,7 +602,7 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
               </div>
               <div style={{ display: "flex", flexWrap: "wrap" }}>
                 {(brief?.signals || deal.notes?.split(",").slice(0, 3) || []).map((s, i) => (
-                  <span key={i} className="sig-chip">{s.slice(0, 40)}</span>
+                  <span key={i} className="sig-chip" style={{ whiteSpace: "normal", lineHeight: 1.35 }}>{s}</span>
                 ))}
               </div>
             </div>
@@ -602,7 +611,7 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
           {/* Tabs */}
           <div style={{ padding: "0 20px", background: "rgba(0,0,0,.1)" }}>
             <div className="tabs">
-              {[["brief", "Brief & Explanation"], ["news", "News & Social"], ["actions", "Next Actions"]].map(([id, lbl]) => (
+              {[["brief", "Brief & Explanation"], ["news", "Research"], ["actions", "Next Actions"]].map(([id, lbl]) => (
                 <div key={id} className={`tab${tab === id ? " active" : ""}`} onClick={() => setTab(id)}>{lbl}</div>
               ))}
             </div>
@@ -634,8 +643,8 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
             {tab === "news" && (
               <>
                 {loadingNews ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6B7A99", padding: "24px 0" }}><div className="spin"/>Loading signals for {deal.company}…</div>
-                ) : (newsFeed || []).map((item, i) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6B7A99", padding: "24px 0" }}><div className="spin"/>Preparing research ideas for {deal.company}…</div>
+                ) : [<div key="note" style={{ fontSize: 11, color: "#6B7A99", marginBottom: 8 }}>AI research suggestions. Search these yourself; DealAI does not fetch live news yet.</div>, ...(newsFeed || []).map((item, i) => (
                   item.type === "news" ? (
                     <div key={i} className="news-item">
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -664,7 +673,7 @@ function DealDetailModal({ deal, onClose, showToast, onEdit, savedBriefs, toggle
                       <div style={{ fontSize: 11, color: "#6B7A99" }}>👍 {item.likes} likes</div>
                     </div>
                   )
-                ))}
+                ))]}
               </>
             )}
 
@@ -1254,22 +1263,13 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
   const hr = new Date().getHours();
   const greeting = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const scoreBand = avgScore >= 70 ? "Strong" : avgScore >= 40 ? "Moderate" : "Needs work";
-  // Signals derived from the user's real deal data (no invented news)
-  const signals = [];
-  deals.forEach(d => {
-    if (d.momentum === "Declining") signals.push({ icon: "⚠", color: "#F59E0B", title: `${d.company} is cooling off`, body: `Momentum declining at ${d.stage} stage. Re-engage ${d.contact}.`, type: "Risk", rank: 0 });
-    if (d.score >= 70 && d.stage !== "Closed Won") signals.push({ icon: "🔥", color: "#22C55E", title: `${d.company} is ready to close`, body: `${d.score}% likelihood at ${d.stage}. Push for next step.`, type: "Hot", rank: 1 });
-    if (["Proposal", "Negotiation"].includes(d.stage) && d.score < 70) signals.push({ icon: "📝", color: "#3B7BFF", title: `${d.company} in ${d.stage}`, body: `Score ${d.score}%. Address open objections with ${d.contact}.`, type: "Action", rank: 2 });
-    if (!d.value) signals.push({ icon: "₹", color: "#A78BFA", title: `${d.company} has no deal value`, body: "Add an estimated value to improve pipeline accuracy.", type: "Data", rank: 3 });
-    if (d.stage === "Lead" && d.score < 40) signals.push({ icon: "🔎", color: "#2DD4BF", title: `Qualify ${d.company}`, body: `Early-stage lead. Confirm budget and need with ${d.contact}.`, type: "Qualify", rank: 4 });
-  });
-  signals.sort((a, b) => a.rank - b.rank);
+  const signals = buildSignals(deals);
   return (
     <div className="page">
       <div className="ph">
         <div>
           <div className="ph-title">{greeting}, {user?.name?.split(" ")[0] || "there"} 👋</div>
-          <div className="ph-sub">{deals.length} deals tracked · {hot} hot deals · {atRisk} at risk</div>
+          <div className="ph-sub">{deals.length} deal{deals.length === 1 ? "" : "s"} tracked · {hot} hot · {atRisk} at risk</div>
         </div>
         <div className="ph-actions">
           <button className="btn btn-out btn-sm" onClick={() => goPage("signals")}>View signal feed</button>
@@ -1337,24 +1337,22 @@ function Dashboard({ deals, user, goPage, setDetailDeal }) {
         </div>
       </div>
 
-      {/* Today's meetings */}
+      {/* Focus deals (real data) */}
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div className="card-hd">Today's meetings</div>
+          <div className="card-hd">Deals to focus on</div>
           <button className="btn btn-p btn-sm" onClick={() => goPage("briefing")}>Generate AI briefs ✦</button>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 9 }}>
-          {[{ t: "9:30 AM", ttl: "Discovery Call", wth: "Sarah Chen · DataStack", score: 62 }, { t: "1:00 PM", ttl: "Demo Session", wth: "Tom Bradley · FinTech Co", score: 88 }, { t: "3:30 PM", ttl: "Contract Review", wth: "Priya Patel · Nexus AI", score: 78 }].map(m => (
-            <div key={m.ttl} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#1A2236", border: "1px solid #1E2A42", borderRadius: 9, cursor: "pointer" }} onClick={() => goPage("briefing")}>
-              <div style={{ textAlign: "center", minWidth: 48 }}>
-                <div style={{ fontFamily: "DM Mono,monospace", fontSize: 13, fontWeight: 700, color: "#E8EDF8" }}>{m.t.split(" ")[0]}</div>
-                <div style={{ fontSize: 9, color: "#6B7A99" }}>{m.t.split(" ")[1]}</div>
-              </div>
+        {deals.filter(d => !d.stage.startsWith("Closed")).length === 0 && <div style={{ fontSize: 12, color: "#6B7A99" }}>No open deals yet.</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 9 }}>
+          {[...deals].filter(d => !d.stage.startsWith("Closed")).sort((a, b) => b.score - a.score).slice(0, 3).map(d => (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#1A2236", border: "1px solid #1E2A42", borderRadius: 9, cursor: "pointer" }} onClick={() => setDetailDeal(d)}>
+              <div style={{ width: 30, height: 30, borderRadius: 7, background: d.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{d.initials}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#E8EDF8" }}>{m.ttl}</div>
-                <div style={{ fontSize: 11, color: "#6B7A99" }}>{m.wth}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#E8EDF8" }}>{d.company}</div>
+                <div style={{ fontSize: 11, color: "#6B7A99" }}>{d.contact} · {d.stage}</div>
               </div>
-              <div style={{ fontFamily: "DM Mono,monospace", fontSize: 13, fontWeight: 700, color: scoreColor(m.score) }}>{m.score}%</div>
+              <div style={{ fontFamily: "DM Mono,monospace", fontSize: 13, fontWeight: 700, color: scoreColor(d.score) }}>{d.score}%</div>
             </div>
           ))}
         </div>
@@ -1532,30 +1530,19 @@ function Pipeline({ deals, setDeals, showToast, setDetailDeal, savedBriefs }) {
 // ─── SIGNAL FEED PAGE ─────────────────────────────────────────────────────────
 function SignalFeed({ deals }) {
   const [activeFilter, setActiveFilter] = useState("All");
-  const signals = [
-    { icon: "💰", deal: "Nexus AI", score: 78, type: "Funding", text: "Nexus AI closes $18M Series B led by Sequoia. APAC expansion planned for Q3.", time: "2h ago" },
-    { icon: "👥", deal: "DataStack", score: 62, type: "Hiring", text: "DataStack posted 23 engineering roles this week — platform team is scaling fast.", time: "5h ago" },
-    { icon: "📰", deal: "CloudPrime", score: 38, type: "News", text: "CloudPrime featured in TechCrunch as a top-10 cloud infrastructure startup to watch in 2025.", time: "Yesterday" },
-    { icon: "⚠", deal: "FinTech Co", score: 88, type: "Risk", text: "Competitor Stripe Atlas launched a directly competing product. Review your positioning with Tom.", time: "2d ago" },
-    { icon: "📣", deal: "AutoScale", score: 22, type: "Social", text: "AutoScale CEO posted about raising a new round on LinkedIn. This could accelerate or stall your deal.", time: "2d ago" },
-    { icon: "📈", deal: "DataStack", score: 62, type: "Signal", text: "DataStack saw a 40% spike in web traffic this week according to SimilarWeb data — buying intent signal.", time: "3d ago" },
-    { icon: "🔗", deal: "Nexus AI", score: 78, type: "Partnership", text: "Nexus AI announced a strategic partnership with Microsoft Azure — expanding their TAM significantly.", time: "4d ago" },
-    { icon: "📉", deal: "CloudPrime", score: 38, type: "Risk", text: "CloudPrime announced a 10% workforce reduction. Decision-maker may have changed — verify your contact.", time: "5d ago" },
-    { icon: "🏆", deal: "FinTech Co", score: 88, type: "Award", text: "FinTech Co named in Deloitte Fast 50 India list for 2025. Strong growth trajectory.", time: "6d ago" },
-    { icon: "💡", deal: "PayLayer", score: 55, type: "Product", text: "PayLayer launched a new API product at their annual dev conference — directly relevant to your pitch.", time: "1w ago" },
-  ];
-  const filters = ["All", "Funding", "Hiring", "News", "Risk", "Social"];
+  const signals = buildSignals(deals).map(x => ({ ...x, text: `${x.title}. ${x.body}`, time: "" }));
+  const filters = ["All", ...Array.from(new Set(signals.map(x => x.type)))];
   const filtered = activeFilter === "All" ? signals : signals.filter(s => s.type === activeFilter);
   return (
     <div className="page">
       <div className="ph">
-        <div><div className="ph-title">Signal Feed</div><div className="ph-sub">Chronological feed of all account signals, colour-coded by deal score</div></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 7, height: 7, background: "#22C55E", borderRadius: "50%", animation: "pulse 2s ease-in-out infinite" }}/><span style={{ fontSize: 12, color: "#6B7A99" }}>Live monitoring</span></div>
+        <div><div className="ph-title">Signal Feed</div><div className="ph-sub">Insights generated from your pipeline, colour-coded by deal score</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ width: 7, height: 7, background: "#22C55E", borderRadius: "50%", animation: "pulse 2s ease-in-out infinite" }}/><span style={{ fontSize: 12, color: "#6B7A99" }}>Updates with your deals</span></div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         {filters.map(f => (
           <button key={f} className="btn btn-xs" onClick={() => setActiveFilter(f)} style={{ background: activeFilter === f ? "#3B7BFF" : "transparent", color: activeFilter === f ? "#fff" : "#6B7A99", border: activeFilter === f ? "none" : "1px solid #1E2A42" }}>
-            {f === "Funding" ? "💰 " : f === "Hiring" ? "👥 " : f === "News" ? "📰 " : f === "Risk" ? "⚠ " : f === "Social" ? "📣 " : ""}{f}
+            {f}
             <span style={{ marginLeft: 4, opacity: .65 }}>({f === "All" ? signals.length : signals.filter(s => s.type === f).length})</span>
           </button>
         ))}
@@ -1668,7 +1655,7 @@ function Investors({ investors, setInvestors, showToast }) {
   return (
     <div className="page">
       <div className="ph">
-        <div><div className="ph-title">Investor Matchmaking</div><div className="ph-sub">AI-scored compatibility based on your startup profile</div></div>
+        <div><div className="ph-title">Investor Matchmaking</div><div className="ph-sub">Sample investor profiles for demo. AI-written intros are real.</div></div>
         <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
           <input className="input" style={{ width: 190, height: 29, fontSize: 12 }} placeholder="Search investors…" value={search} onChange={e => setSearch(e.target.value)}/>
           <span className="ai-chip">✦ {investors.length} matched</span>
@@ -1728,20 +1715,15 @@ function Analytics({ deals }) {
       </div>
       <div className="g2" style={{ marginBottom: 14 }}>
         <div className="card">
-          <div className="card-hd" style={{ marginBottom: 4 }}>Revenue trend</div>
-          <div className="card-sub">Monthly (₹K)</div>
+          <div className="card-hd" style={{ marginBottom: 4 }}>Value by stage</div>
+          <div className="card-sub">From your deals (₹)</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 110 }}>
-            {[42, 55, 48, 68, 72, 80, 95, 88, 110, 104, 132, 148].map((v, i) => {
-              const m = ["J","F","M","A","M","J","J","A","S","O","N","D"][i];
-              return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <div style={{ width: "100%", height: `${(v/148)*100}px`, background: i >= 10 ? "#3B7BFF" : "#1E2A42", borderRadius: "3px 3px 0 0", position: "relative" }}>
-                    {i === 11 && <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", fontSize: 8, fontWeight: 700, color: "#3B7BFF", whiteSpace: "nowrap" }}>₹{v}K</div>}
-                  </div>
-                  <span style={{ fontSize: 8, color: "#6B7A99" }}>{m}</span>
-                </div>
-              );
-            })}
+            {byStage.map(({ stage, value }) => (
+              <div key={stage} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                <div title={fmt(value)} style={{ width: "100%", height: `${(value / Math.max(1, ...byStage.map(x => x.value))) * 100}px`, minHeight: 2, background: value ? "#3B7BFF" : "#1E2A42", borderRadius: "3px 3px 0 0" }}/>
+                <span style={{ fontSize: 8, color: "#6B7A99", textAlign: "center" }}>{stage.split(" ").map(w => w[0]).join("")}</span>
+              </div>
+            ))}
           </div>
         </div>
         <div className="card">
@@ -2003,7 +1985,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [deals, setDeals] = useState(SEED_DEALS);
   const [investors, setInvestors] = useState(SEED_INVESTORS);
-  const [notifs, setNotifs] = useState(SEED_NOTIFS);
+  const [notifs, setNotifs] = useState([]);
   const [detailDeal, setDetailDeal] = useState(null);
   const [sbOpen, setSbOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
