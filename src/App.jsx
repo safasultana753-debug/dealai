@@ -6,7 +6,7 @@ async function ai(prompt, max = 1000) {
   try {
     const r = await fetch("/api/ai", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: max,
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: max,
         messages: [{ role: "user", content: prompt }] })
     });
     const d = await r.json();
