@@ -59,6 +59,9 @@ const SEED_NOTIFS = [
 const STAGES = ["Lead","Qualified","Demo","Proposal","Negotiation","Closed Won","Closed Lost"];
 const scoreColor = s => s >= 70 ? "#22C55E" : s >= 40 ? "#F59E0B" : "#EF4444";
 
+// Social sign-in is hidden until Google/LinkedIn are enabled in Supabase Auth
+const SHOW_OAUTH = false;
+
 // ─── PIPELINE SIGNALS (derived from real deal data, never invented) ─────────
 const buildSignals = deals => {
   const out = [];
@@ -897,9 +900,11 @@ const signup = async () => {
             <div style={{ cursor: "pointer", marginBottom: 24 }} onClick={() => go("landing")}><span style={{ fontSize: 12.5, color: "#6B7A99" }}>← Back to home</span></div>
             <div style={{ fontFamily: "Sora,sans-serif", fontSize: 20, fontWeight: 800, color: "#E8EDF8", marginBottom: 5 }}>Welcome back</div>
             <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 20 }}>Sign in to your DealAi workspace.</div>
+            {SHOW_OAUTH && <>
             <button className="oauth-btn" onClick={() => handleOAuth("google")} disabled={!!oauthLoading}>{oauthLoading === "google" ? <div className="spin"/> : "G"}{"\u00a0\u00a0"}Continue with Google</button>
             <button className="oauth-btn" onClick={() => handleOAuth("linkedin_oidc")} disabled={!!oauthLoading}>{oauthLoading === "linkedin_oidc" ? <div className="spin"/> : "💼"}{"\u00a0\u00a0"}Continue with LinkedIn</button>
             <div className="auth-div"><div className="auth-div-line"/><span>or sign in with email</span><div className="auth-div-line"/></div>
+            </>}
             <div className="fgrp"><label className="lbl">Work email</label><input className="input" type="email" placeholder="you@company.com" value={form.email} onChange={e => up("email", e.target.value)}/></div>
             <div className="fgrp"><label className="lbl">Password</label><PwField placeholder="••••••••" value={form.password} onChange={e => up("password", e.target.value)} onKeyDown={e => e.key === "Enter" && login()}/></div>
             <div style={{ textAlign: "right", marginBottom: 13 }}><span style={{ fontSize: 12.5, color: "#3B7BFF", cursor: "pointer", fontWeight: 600 }} onClick={() => { setMode("forgot"); setErr(""); }}>Forgot password?</span></div>
@@ -917,8 +922,10 @@ const signup = async () => {
             <div style={{ cursor: "pointer", marginBottom: 24 }} onClick={() => go("landing")}><span style={{ fontSize: 12.5, color: "#6B7A99" }}>← Back to home</span></div>
             <div style={{ fontFamily: "Sora,sans-serif", fontSize: 20, fontWeight: 800, color: "#E8EDF8", marginBottom: 5 }}>Create your account</div>
             <div style={{ fontSize: 13, color: "#6B7A99", marginBottom: 20 }}>Start your 14-day free trial — no card required.</div>
+            {SHOW_OAUTH && <>
             <button className="oauth-btn" onClick={() => handleOAuth("google")} disabled={!!oauthLoading}>{oauthLoading === "google" ? <div className="spin"/> : "G"}{"\u00a0\u00a0"}Continue with Google</button>
             <div className="auth-div"><div className="auth-div-line"/><span>or sign up with email</span><div className="auth-div-line"/></div>
+            </>}
             <div className="fgrp"><label className="lbl">Full name</label><input className="input" placeholder="Jordan Taylor" value={form.name} onChange={e => up("name", e.target.value)}/></div>
             <div className="fgrp"><label className="lbl">Work email</label><input className="input" type="email" placeholder="you@company.com" value={form.email} onChange={e => up("email", e.target.value)}/></div>
             <div className="fgrp"><label className="lbl">Password (min 8 chars)</label><PwField placeholder="Choose a password" value={form.password} onChange={e => up("password", e.target.value)}/></div>
