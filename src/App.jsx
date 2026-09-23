@@ -1885,7 +1885,7 @@ function Landing({ go, showToast }) {
   return (
     <div className="hero">
       <nav className="h-nav">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon">DA</div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 14, color: "#F1F5F9" }}>DealAi</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="sb-icon"><svg width="18" height="18" viewBox="0 0 56 56" fill="none"><path d="M15 36 A13 13 0 1 1 41 36" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/><path d="M15 36 A13 13 0 0 1 31 24.3" stroke="#F0AD52" strokeWidth="4" strokeLinecap="round"/><circle cx="28" cy="36" r="3" fill="currentColor"/><line x1="28" y1="36" x2="34" y2="27" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg></div><span style={{ fontFamily: "Sora,sans-serif", fontWeight: 800, fontSize: 14, color: "#F1F5F9" }}>DealAi</span></div>
         <div className="h-links">{["Features","Pricing","Investors","Blog"].map(l => <span key={l} className="h-link" onClick={() => navClick(l)}>{l}</span>)}</div>
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           <button className="hbs" style={{ padding: "7px 14px", fontSize: 13 }} onClick={() => go("auth")}>Sign in</button>
