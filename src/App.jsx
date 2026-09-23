@@ -58,6 +58,39 @@ const SEED_NOTIFS = [
 ];
 const STAGES = ["Lead","Qualified","Demo","Proposal","Negotiation","Closed Won","Closed Lost"];
 const scoreColor = s => s >= 70 ? "#22C55E" : s >= 40 ? "#F59E0B" : "#EF4444";
+
+// ─── DEALS ↔ SUPABASE ─────────────────────────────────────────────────────────
+const isUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
+const rowToDeal = r => ({
+  id: r.id, company: r.company || "", contact: r.contact || "", email: r.email || "", phone: r.phone || "",
+  value: Number(r.value) || 0, stage: r.stage || "Lead", score: r.score ?? 30, sector: r.sector || "SaaS",
+  source: r.source || "Inbound", notes: r.notes || "", momentum: r.momentum || "Stable",
+  initials: (r.company || "??").slice(0, 2).toUpperCase(), color: scoreColor(r.score ?? 30),
+  created: (r.created_at || "").slice(0, 10), lastActivity: (r.created_at || "").slice(0, 10),
+});
+const dealsDb = {
+  load: async () => {
+    const { data, error } = await supabase.from("deals").select("*").order("created_at", { ascending: false });
+    if (error) { console.error("Load deals failed:", error); return null; }
+    return data.map(rowToDeal);
+  },
+  save: async d => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Please log in again to save deals.");
+    const row = { user_id: user.id, title: d.company, company: d.company, contact: d.contact, email: d.email, phone: d.phone,
+      value: Number(d.value) || 0, stage: d.stage, score: Number(d.score) || 0, momentum: d.momentum,
+      sector: d.sector, source: d.source, notes: d.notes };
+    if (isUuid(d.id)) row.id = d.id;
+    const { data, error } = await supabase.from("deals").upsert(row).select().single();
+    if (error) throw error;
+    return rowToDeal(data);
+  },
+  remove: async id => {
+    if (!isUuid(id)) return;
+    const { error } = await supabase.from("deals").delete().eq("id", id);
+    if (error) throw error;
+  },
+};
 const scoreLabel = s => s >= 70 ? "High" : s >= 40 ? "Medium" : "Low";
 const fmt = v => v >= 100000 ? `₹${(v/100000).toFixed(1)}L` : `₹${(v/1000).toFixed(0)}K`;
 const uid = () => `x${Date.now()}${Math.random().toString(36).slice(2,6)}`;
@@ -1331,16 +1364,21 @@ function Pipeline({ deals, setDeals, showToast, setDetailDeal, savedBriefs }) {
   }, [deals, filter, search, sortBy]);
 
   const saveDeal = async d => {
-    const exists = deals.find(x => x.id === d.id);
-    const next = exists ? deals.map(x => x.id === d.id ? d : x) : [d, ...deals];
-    setDeals(next); await db.set("dg_deals", next);
-    showToast(exists ? `${d.company} updated` : `${d.company} added`, "success"); setModal(null);
+    try {
+      const saved = await dealsDb.save(d);
+      const exists = deals.find(x => x.id === d.id);
+      const next = (exists ? deals.map(x => x.id === d.id ? saved : x) : [saved, ...deals]).filter(x => isUuid(x.id));
+      setDeals(next);
+      showToast(exists ? `${d.company} updated` : `${d.company} added`, "success"); setModal(null);
+    } catch (e) { showToast(e.message || "Could not save deal", "error"); }
   };
   const deleteDeal = async id => {
-    const d = deals.find(x => x.id === id);
-    const next = deals.filter(x => x.id !== id);
-    setDeals(next); await db.set("dg_deals", next);
-    showToast(`${d?.company} deleted`, "warn"); setModal(null);
+    try {
+      const d = deals.find(x => x.id === id);
+      await dealsDb.remove(id);
+      setDeals(deals.filter(x => x.id !== id));
+      showToast(`${d?.company} deleted`, "warn"); setModal(null);
+    } catch (e) { showToast(e.message || "Could not delete deal", "error"); }
   };
   const move = async (id, dir) => {
     const d = deals.find(x => x.id === id);
@@ -1964,11 +2002,16 @@ export default function App() {
     (async () => {
       const [u, d, inv, onboarded, sb] = await Promise.all([db.get("dg_user"), db.get("dg_deals"), db.get("dg_investors"), db.get("dg_onboarded"), db.get("dg_saved_briefs")]);
       if (u) { setUser(u); setScreen(onboarded ? "app" : "onboarding"); }
-      if (d && d.length) setDeals(d);
       if (inv && inv.length) setInvestors(inv);
       if (sb) setSavedBriefs(sb);
     })();
   }, []);
+
+  // Load this user's real deals from Supabase (sample deals show until they add one)
+  useEffect(() => {
+    if (!user) return;
+    (async () => { const d = await dealsDb.load(); if (d && d.length) setDeals(d); })();
+  }, [user]);
 
   const toggleSaveBrief = useCallback(async (dealId) => {
     setSavedBriefs(prev => {
@@ -1992,15 +2035,21 @@ export default function App() {
   }, []);
 
   const saveDeal = async d => {
-    const exists = deals.find(x => x.id === d.id);
-    const next = exists ? deals.map(x => x.id === d.id ? d : x) : [d, ...deals];
-    setDeals(next); await db.set("dg_deals", next);
-    showToast(exists ? `${d.company} updated` : `${d.company} added`, "success"); setEditModal(null); setDetailDeal(null);
+    try {
+      const saved = await dealsDb.save(d);
+      const exists = deals.find(x => x.id === d.id);
+      const next = (exists ? deals.map(x => x.id === d.id ? saved : x) : [saved, ...deals]).filter(x => isUuid(x.id));
+      setDeals(next);
+      showToast(exists ? `${d.company} updated` : `${d.company} added`, "success"); setEditModal(null); setDetailDeal(null);
+    } catch (e) { showToast(e.message || "Could not save deal", "error"); }
   };
   const deleteDeal = async id => {
-    const d = deals.find(x => x.id === id);
-    const next = deals.filter(x => x.id !== id); setDeals(next); await db.set("dg_deals", next);
-    showToast(`${d?.company} deleted`, "warn"); setEditModal(null); setDetailDeal(null);
+    try {
+      const d = deals.find(x => x.id === id);
+      await dealsDb.remove(id);
+      setDeals(deals.filter(x => x.id !== id));
+      showToast(`${d?.company} deleted`, "warn"); setEditModal(null); setDetailDeal(null);
+    } catch (e) { showToast(e.message || "Could not delete deal", "error"); }
   };
 
   const unread = notifs.filter(n => !n.read).length;
